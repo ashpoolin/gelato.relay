@@ -22,6 +22,7 @@ app.use(express.json());
 // });
 
 const MAX_RETRIES = 3;
+const RETRY_DELAY = 3000; // 3 seconds
 
 app.post('/relay', (req, res) => {
   let retries = 0;
@@ -34,7 +35,8 @@ app.post('/relay', (req, res) => {
       .catch(error => {
         if (retries < MAX_RETRIES) {
           retries++;
-          sendRequest(); // Retry the request
+          setTimeout(sendRequest, RETRY_DELAY); // Retry the request after the delay
+          // sendRequest(); // Retry the request
         } else {
           res.status(500).send(error); // Return 500 error after maximum retries
         }
