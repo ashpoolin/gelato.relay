@@ -64,20 +64,20 @@ let allowQuery = false;
 
 const confirmAndSend = async (req) => {
   // ping and wake up the fucking server
-  fetch(URL)
-    .then((response) => {
-      if (response.ok) {
-        console.log("Server is awake");
-      } else {
-        console.log("Server did not respond as expected");
-      }
-    })
-    .catch((error) => {
-      console.log("Error occurred while pinging the server:", error);
-    });
+  // fetch(URL)
+  //   .then((response) => {
+  //     if (response.ok) {
+  //       console.log("Server is awake");
+  //     } else {
+  //       console.log("Server did not respond as expected");
+  //     }
+  //   })
+  //   .catch((error) => {
+  //     console.log("Error occurred while pinging the server:", error);
+  //   });
 
-  // delay to allow server to wake and tx to confirm
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  // // delay to allow server to wake and tx to confirm
+  // await new Promise((resolve) => setTimeout(resolve, 5000));
 
   try {
     // const signature = req.body[0];
