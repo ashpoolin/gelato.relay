@@ -18,6 +18,17 @@ const { connect } = require("http2");
 // import BN from 'bn.js';
 // import {Buffer} from 'buffer';
 require("dotenv").config();
+const Pool = require('pg').Pool
+const pool = new Pool({
+    user: process.env.PGUSERNAME,
+    host: process.env.PGHOSTNAME,
+    database: process.env.PGDATABASE,
+    password: process.env.PGPASSWORD,
+    port: process.env.PGPORT,
+    ssl: {
+      rejectUnauthorized: true
+    }
+  });
 
 // system program interfaces
 const TransferLayout = struct([u32("discriminator"), u64("lamports")]);
@@ -57,6 +68,7 @@ const CORRECT_DESTINATION = process.env.SOL_TROLL_DESTINATION_ADDRESS;
 console.log(`CORRECT_DESTINATION: ${CORRECT_DESTINATION}`);
 const CORRECT_LAMPORTS = 1000000;
 console.log(`CORRECT_LAMPORTS: ${CORRECT_LAMPORTS}`);
+let sigBurnCheck = false;
 let hashCheck = false;
 let errCheck = false;
 let sigCheck = false;
@@ -64,6 +76,11 @@ let destinationCheck = false;
 let lamportsCheck = false;
 let timeoutCheck = false;
 let allowQuery = false;
+
+const checkIfSignatureExists = async (signature) => {
+  const { rows } = await pool.query(`SELECT EXISTS (SELECT 1 FROM gelato_relay_sigburn WHERE signature = '${signature}') AS exists;`);
+  return rows[0].exists;
+};
 
 const confirmAndSend = async (req) => {
   // ping and wake up the fucking server
@@ -86,6 +103,21 @@ const confirmAndSend = async (req) => {
     // const signature = req.body[0];
     // const searchQuery = req.body[1];
     const signature = req.body.signature;
+    try {
+      const existsInDatabase = await checkIfSignatureExists(signature);
+      if (existsInDatabase === false) {
+        sigBurnCheck = true
+        console.log(`signature burn check passed: ${sigBurnCheck}`)
+
+      } else {
+        sigBurnCheck = false
+        return `signature ${signature} has already been used.`
+      }
+    } catch (err) {
+      console.log(`signature burn check failed: ${err}`)
+    }
+
+
     const searchQuery = req.body.query;
     const data = await SOLANA_CONNECTION.getTransaction(signature);
     
@@ -212,6 +244,7 @@ const confirmAndSend = async (req) => {
 
     try {
       if (
+        sigBurnCheck &&
         hashCheck &&
         sigCheck &&
         errCheck &&
@@ -240,6 +273,14 @@ const confirmAndSend = async (req) => {
       console.log("Allowing query");
       const data = { message: searchQuery };
       console.log(data);
+
+      pool.query('INSERT INTO gelato_relay_sigburn (signature) VALUES ($1)', [signature], (error, results) => {
+        if (error) {
+          console.error('Error executing INSERT statement:', error);
+        } else {
+          console.log('New signature inserted successfully');
+        }
+      });
 
       return axios
         .post(URL, data, {
