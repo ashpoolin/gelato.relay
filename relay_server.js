@@ -2,6 +2,7 @@
 const axios = require("axios");
 const bs58 = require("bs58");
 const Buffer = require("buffer").Buffer;
+const { createHash } = require('crypto');
 const { Connection, LAMPORTS_PER_SOL } = require("@solana/web3.js");
 const { publicKey, u64 } = require("@solana/buffer-layout-utils");
 const {
@@ -23,6 +24,7 @@ const TransferLayout = struct([u32("discriminator"), u64("lamports")]);
 
 let programMap = new Map([
   ["11111111111111111111111111111111", "system"],
+  ["MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr", "memo"],
   ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "spl-token"],
 ]);
 
@@ -55,6 +57,7 @@ const CORRECT_DESTINATION = process.env.SOL_TROLL_DESTINATION_ADDRESS;
 console.log(`CORRECT_DESTINATION: ${CORRECT_DESTINATION}`);
 const CORRECT_LAMPORTS = 1000000;
 console.log(`CORRECT_LAMPORTS: ${CORRECT_LAMPORTS}`);
+let hashCheck = false;
 let errCheck = false;
 let sigCheck = false;
 let destinationCheck = false;
@@ -85,6 +88,36 @@ const confirmAndSend = async (req) => {
     const signature = req.body.signature;
     const searchQuery = req.body.query;
     const data = await SOLANA_CONNECTION.getTransaction(signature);
+    
+    // check memo for correct message hash
+    const hash = createHash('sha256').update(searchQuery).digest('base64');
+    let queryHash;
+    data?.meta.logMessages.map(message => {
+        if (message.includes('Program log: Memo')) {
+            // console.log(`message: ${message}`);
+            // queryHash = message.split('Program log: Memo')// [1].split(' ')[0];
+            const regex = /"([^"]*)"/;
+            const match = message.match(regex);
+
+            if (match) {
+              queryHash = match[1];
+            } else {
+              console.log('No match found');
+            }
+        }
+    })
+    try {
+      if (hash === queryHash) {
+        hashCheck = true;
+      } else {
+        hashCheck = false;
+        console.log(`query hash check failed: ${hashCheck}`);
+      }
+    } catch (err) {
+      console.log(`Error: query hash check failed: ${err}`);
+      return "Error: query hash check failed";
+    }
+
     const slot = data?.slot;
     const currentEpochTimeInSeconds = Math.floor(Date.now() / 1000);
     console.log(`currentEpochTimeInSeconds: ${currentEpochTimeInSeconds}`);
@@ -179,6 +212,7 @@ const confirmAndSend = async (req) => {
 
     try {
       if (
+        hashCheck &&
         sigCheck &&
         errCheck &&
         lamportsCheck &&
@@ -191,6 +225,7 @@ const confirmAndSend = async (req) => {
       } else {
         console.log("At least one check is false");
         allowQuery = false;
+        console.log(`hashCheck: ${hashCheck}`);
         console.log(`allowQuery: ${allowQuery}`);
         console.log(`sigCheck: ${sigCheck}`);
         console.log(`errCheck: ${errCheck}`);
